@@ -114,13 +114,19 @@ describe("linePlugin gateway.startAccount", () => {
     const { runtime, monitorLineProvider } = createRuntime();
     setLineRuntime(runtime);
 
-    await linePlugin.gateway!.startAccount!(
-      createStartAccountCtx({
-        token: "token",
-        secret: "secret",
-        runtime: createRuntimeEnv(),
-      }),
-    );
+    const ac = new AbortController();
+    const ctx = createStartAccountCtx({
+      token: "token",
+      secret: "secret",
+      runtime: createRuntimeEnv(),
+    });
+    (ctx as any).abortSignal = ac.signal;
+
+    const started = linePlugin.gateway!.startAccount!(ctx);
+
+    // Promise must stay pending until abort fires
+    ac.abort();
+    await started;
 
     expect(monitorLineProvider).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -129,5 +135,8 @@ describe("linePlugin gateway.startAccount", () => {
         accountId: "default",
       }),
     );
+    await expect(monitorLineProvider.mock.results[0]?.value).resolves.toMatchObject({
+      stop: expect.any(Function),
+    });
   });
 });
